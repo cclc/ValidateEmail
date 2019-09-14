@@ -1,0 +1,238 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Validate Client's Email</title>
+    <meta name="author" content="lccc 2019/09/13">
+    <!-- Vue -->
+    <!-- 开发环境版本，包含了有帮助的命令行警告 -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script> -->
+    <!-- 生产环境版本，优化了尺寸和速度 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+
+    <!-- ElementUI -->
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- 引入组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+
+    <!-- axios -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+
+<body>
+    <div id="app" style="text-align: center">
+        <div class="center">
+            输入需要检测的邮箱，可直接复制excel里不带表头的一列数据
+            <el-input type="textarea" :rows="10" style="margin-top:10px"
+                placeholder="请输入要检测的邮箱&#13;&#10;如:&#13;&#10;request@aabbcc.com&#13;&#10;info@test.com"
+                v-model="inputEmail">
+            </el-input>
+            <el-button type="primary" style="margin-top: 10px;float: right;" @click="startValidation">开始检测</el-button>
+        </div>
+
+        <div class="center" style="margin-top:50px" v-if="showResult">
+            检测结果
+            <el-table :data="emailArray" border style="width: 100%;margin-top: 10px" :row-class-name="tableRowClassName">
+                <el-table-column prop="index" label="单元格索引" align="center">
+                </el-table-column>
+                <el-table-column prop="email" label="邮箱" align="center">
+                </el-table-column>
+                <el-table-column prop="validationTimes" label="检测次数" align="center">
+                </el-table-column>
+                <el-table-column prop="isValidated" label="检测结果" align="center" :formatter="isValidatedCellFormatter">
+                </el-table-column>
+                <!-- <el-table-column prop="validationInfo" label="检测信息" align="center">
+                </el-table-column> -->
+            </el-table>
+        </div>
+    </div>
+</body>
+
+<script>
+    var app = new Vue({
+        el: '#app',
+        data: {
+            inputEmail: '',
+            emailArray: [],
+            showResult: false,
+            validationIndex: 0,
+            maxValidationTimes: 10
+        },
+        mounted: function () {
+        },
+        methods: {
+            startValidation() {
+                // 用换行符分割字符串
+                const tmpEmailArray = this.inputEmail.split('\n')
+
+                // 将临时数据处理后保存入emailArray中
+                var index = -1 // 单元格索引，判断excel中所在行号用
+                let readCellFlag = false  // 判断一个单元格的读取是否结束
+                for (let i = 0; i < tmpEmailArray.length; i++) {
+                    if (tmpEmailArray[i].indexOf('"') === 0) {
+                        // 如果字符串中以 " 开头，则说明它是一个单元格内邮箱集合的起始邮箱，新建索引
+                        index = index + 1
+                        this.emailArray.push({
+                            email: tmpEmailArray[i].replace('"', '').trim(),
+                            validationTimes: 0,
+                            isValidated: false,
+                            index: index,
+                            validationInfo: ''
+                        })
+                        readCellFlag = true // 开始单元格读取
+                    } else if (tmpEmailArray[i].lastIndexOf('"') === tmpEmailArray[i].length - 1) {
+                        // 如果字符串中以 " 结束，则说明它是一个单元格内邮箱集合的结束邮箱，使用原索引
+                        this.emailArray.push({
+                            email: tmpEmailArray[i].replace('"', '').trim(),
+                            validationTimes: 0,
+                            isValidated: false,
+                            index: index,
+                            validationInfo: ''
+                        })
+                        readCellFlag = false // 结束单元格读取
+                    } else {
+                        if (readCellFlag) {
+                            // 单元格读取，使用原索引
+                            this.emailArray.push({
+                                email: tmpEmailArray[i].trim(),
+                                validationTimes: 0,
+                                isValidated: false,
+                                index: index,
+                                validationInfo: ''
+                            })
+                        } else {
+                            // 非单元格读取的正常读取，新建索引
+                            index = index + 1
+                            this.emailArray.push({
+                                email: tmpEmailArray[i].trim(),
+                                validationTimes: 0,
+                                isValidated: false,
+                                index: index,
+                                validationInfo: ''
+                            })
+                        }
+                    }
+                }
+
+                // 显示表格
+                this.showResult = true
+
+                // 开始检测
+                this.queryApiToValidate()
+            },
+            queryApiToValidate() {
+                try {
+                    if (this.validationIndex < this.emailArray.length) {
+                        if (this.emailArray[this.validationIndex].isValidated === false) {
+                            // 检验未检验通过的
+                            setTimeout(async () => {
+                                let data = new FormData()
+                                data.append('data', this.emailArray[this.validationIndex].email)
+                                data.append('type', 'verify')
+                                // 向这个网站的邮箱检测接口发出post请求
+                                const response = await axios.post('http://tool.chacuo.net/mailverify', data)
+                                const responseString = JSON.stringify(response)
+                                if (responseString.indexOf('验证成功！') > 0) {
+                                    this.emailArray[this.validationIndex].isValidated = true
+                                }
+                                this.emailArray[this.validationIndex].validationInfo = responseString
+                                this.emailArray[this.validationIndex].validationTimes = this.emailArray[this.validationIndex].validationTimes + 1 // 验证次数加1
+                                this.validationIndex = this.validationIndex + 1
+                                this.queryApiToValidate() // 自调用实现循环
+                            }, 2000);
+                        } else {
+                            // 之前已经验证通过的则跳过，验证下一个
+                            this.validationIndex = this.validationIndex + 1
+                            this.queryApiToValidate()
+                        }
+                    } else {
+                        // 检查数组里检验未通过部分的检验次数，如果有未到最大次数的的则再检查一遍
+                        for (let i = 0; i < this.emailArray.length; i++) {
+                            if (this.emailArray[i].isValidated === false && this.emailArray[i].validationTimes < this.maxValidationTimes) {
+                                this.validationIndex = 0 // 重置索引再做一遍
+                                setTimeout(() => {
+                                    this.queryApiToValidate()
+                                }, 2000);
+                                break // 跳出循环
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.log(e)
+                }
+            },
+            isValidatedCellFormatter(row) {
+                if (row.isValidated === true) {
+                    return '通过'
+                } else if (row.validationTimes === 0 && row.isValidated === false) {
+                    return '待检查'
+                } else if (row.validationTimes !== 0 && row.isValidated === false) {
+                    return '失败'
+                }
+            },
+            tableRowClassName({row, rowIndex}) {
+                if (row.validationTimes !== 0 && row.isValidated === false) {
+                    return 'fail-row'
+                }
+                return ''
+            }
+        }
+    })
+</script>
+
+<style>
+    .center {
+        width: 85%;
+        margin: auto
+    }
+
+    .el-table .fail-row {
+        background: rgb(254, 240, 240)
+    }
+</style>
+
+</html>
+
+<script>
+    /* 和excel单元格保持相同的数据结构，但是这个结构不方便用表格显示和数据分析遂先放弃
+
+    // 将临时数据处理后保存入emailArray中
+    let readCellFlag = false  // 判断一个单元格的读取是否结束
+    for (let i = 0; i < tmpEmailArray.length; i++) {
+        if (tmpEmailArray[i].indexOf('"') === 0) {
+            // 如果字符串中以 " 开头，则说明它是一个单元格内邮箱集合的起始邮箱，新建对象
+            this.emailArray.push([{
+                email: tmpEmailArray[i].replace('"', '').trim(),
+                validationTimes: 0,
+                isValidated: false
+            }])
+            readCellFlag = true // 开始单元格读取
+        } else if (tmpEmailArray[i].lastIndexOf('"') === tmpEmailArray.length - 1) {
+            // 如果字符串中以 " 结束，则说明它是一个单元格内邮箱集合的结束邮箱，使用原邮箱对象
+            this.emailArray[this.emailArray.length - 1].push({
+                email: tmpEmailArray[i].replace('"', '').trim(),
+                validationTimes: 0,
+                isValidated: false
+            })
+            readCellFlag = false // 结束单元格读取
+        } else {
+            if (readCellFlag) {
+                // 单元格读取
+                this.emailArray[this.emailArray.length - 1].push({
+                    email: tmpEmailArray[i].trim(),
+                    validationTimes: 0,
+                    isValidated: false
+                })
+            } else {
+                // 非单元格读取的正常读取
+                this.emailArray.push([{
+                    email: tmpEmailArray[i].trim(),
+                    validationTimes: 0,
+                    isValidated: false
+                }])
+            }
+        }
+    }
+    */
+</script>
