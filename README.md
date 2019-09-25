@@ -1,7 +1,7 @@
 # ValidateEmail
 检测大量邮件的工具
 
-![operationGuide](https://github.com/cclc/ValidateEmail/operationGuide.gif)
+![operationGuide](https://github.com/cclc/ValidateEmail/blob/master/operationGuide.gif)
 
 ---
 
