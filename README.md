@@ -1,7 +1,7 @@
 # ValidateEmail
 检测大量邮件的工具
 
-![operationGuide](https://ftp.bmp.ovh/imgs/2019/09/195e730ddf0ac060.gif)
+![operationGuide](https://github.com/cclc/ValidateEmail/operationGuide.gif)
 
 ---
 
